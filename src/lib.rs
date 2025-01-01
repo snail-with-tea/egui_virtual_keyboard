@@ -167,10 +167,10 @@ impl FromStr for KeyAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct KeyboardButton {
+pub struct Button {
     text: String,
     action: KeyAction,
-    takes_space: f32,
+    size_mult: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,7 +195,7 @@ impl Error for ParseButtonError {
     }
 }
 
-impl FromStr for KeyboardButton {
+impl FromStr for Button {
     type Err = ParseButtonError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = s
@@ -250,30 +250,30 @@ impl FromStr for KeyboardButton {
         Ok(Self {
             text,
             action,
-            takes_space,
+            size_mult: takes_space,
         })
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct KeyboardRow {
-    pub buttons: Vec<KeyboardButton>,
+pub struct Row {
+    pub buttons: Vec<Button>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseKeyboardRowError {
+pub struct ParseRowError {
     pub parsing: String,
     pub inner: Vec<ParseButtonError>,
 }
 
-impl Display for ParseKeyboardRowError {
+impl Display for ParseRowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Could not parse row from \"{}\"", self.parsing)
     }
 }
 
-impl FromStr for KeyboardRow {
-    type Err = ParseKeyboardRowError;
+impl FromStr for Row {
+    type Err = ParseRowError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut error = Self::Err {
             parsing: s.to_string(),
@@ -285,14 +285,10 @@ impl FromStr for KeyboardRow {
             .and_then(|inner| {
                 let buttons = inner
                     .split_inclusive("}")
-                    .filter_map(|btn| {
-                        KeyboardButton::from_str(btn)
-                            .map_err(|e| error.inner.push(e))
-                            .ok()
-                    })
+                    .filter_map(|btn| Button::from_str(btn).map_err(|e| error.inner.push(e)).ok())
                     .collect();
                 if error.inner.is_empty() {
-                    Some(KeyboardRow { buttons })
+                    Some(Row { buttons })
                 } else {
                     None
                 }
@@ -301,26 +297,23 @@ impl FromStr for KeyboardRow {
     }
 }
 
-impl KeyboardRow {
+impl Row {
     fn takes_width(&self) -> f32 {
-        self.buttons
-            .iter()
-            .map(|btn| btn.takes_space.max(1.0))
-            .sum()
+        self.buttons.iter().map(|btn| btn.size_mult.max(1.0)).sum()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct KeyboardLayout {
+pub struct Layout {
     name: String,
-    rows: Vec<KeyboardRow>,
+    rows: Vec<Row>,
 }
 
 #[derive(Debug)]
 pub struct ParseLayoutError {
     pub parsing: String,
     pub cause: String,
-    pub inner: Vec<ParseKeyboardRowError>,
+    pub inner: Vec<ParseRowError>,
 }
 
 impl Display for ParseLayoutError {
@@ -331,7 +324,7 @@ impl Display for ParseLayoutError {
     }
 }
 
-impl FromStr for KeyboardLayout {
+impl FromStr for Layout {
     type Err = ParseLayoutError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut error = Self::Err {
@@ -352,7 +345,7 @@ impl FromStr for KeyboardLayout {
 
         let rows = r
             .split("\n")
-            .map(KeyboardRow::from_str)
+            .map(Row::from_str)
             .filter_map(|res| res.map_err(|e| error.inner.push(e)).ok())
             .collect();
 
@@ -384,51 +377,51 @@ fn parse_key_action() {
 
 #[test]
 fn parse_button() {
-    let button = KeyboardButton::from_str("{?123}");
+    let button = Button::from_str("{?123}");
     assert_eq!(
-        Ok(KeyboardButton {
+        Ok(Button {
             text: "?123".to_string(),
             action: KeyAction::FromText,
-            takes_space: 1.0,
+            size_mult: 1.0,
         }),
         button
     );
-    let button = KeyboardButton::from_str("{?123:}");
+    let button = Button::from_str("{?123:}");
     assert!(button.is_err());
-    let button = KeyboardButton::from_str("{?123:Layout(QWERTY_Mobile)}");
+    let button = Button::from_str("{?123:Layout(QWERTY_Mobile)}");
     assert_eq!(
-        Ok(KeyboardButton {
+        Ok(Button {
             text: "?123".to_string(),
             action: KeyAction::Layout("QWERTY_Mobile".to_string()),
-            takes_space: 1.0,
+            size_mult: 1.0,
         }),
         button
     );
-    let button = KeyboardButton::from_str("{\\:}");
+    let button = Button::from_str("{\\:}");
     assert_eq!(
-        Ok(KeyboardButton {
+        Ok(Button {
             text: ":".to_string(),
             action: KeyAction::FromText,
 
-            takes_space: 1.0,
+            size_mult: 1.0,
         }),
         button
     );
-    let button = KeyboardButton::from_str("{\\::Key(A)}");
+    let button = Button::from_str("{\\::Key(A)}");
     assert_eq!(
-        Ok(KeyboardButton {
+        Ok(Button {
             text: ":".to_string(),
             action: KeyAction::Key(egui::Key::A),
-            takes_space: 1.0,
+            size_mult: 1.0,
         }),
         button
     );
-    let button = KeyboardButton::from_str("{\\::Key(A);2.0}");
+    let button = Button::from_str("{\\::Key(A);2.0}");
     assert_eq!(
-        Ok(KeyboardButton {
+        Ok(Button {
             text: ":".to_string(),
             action: KeyAction::Key(egui::Key::A),
-            takes_space: 2.0,
+            size_mult: 2.0,
         }),
         button
     );
@@ -436,38 +429,38 @@ fn parse_button() {
 
 #[test]
 fn parse_row() {
-    let row = KeyboardRow::from_str("[{q}{w}{e}]");
+    let row = Row::from_str("[{q}{w}{e}]");
     assert_eq!(
-        Ok(KeyboardRow {
+        Ok(Row {
             buttons: vec![
-                KeyboardButton {
+                Button {
                     text: "q".to_string(),
                     action: KeyAction::FromText,
-                    takes_space: 1.0,
+                    size_mult: 1.0,
                 },
-                KeyboardButton {
+                Button {
                     text: "w".to_string(),
                     action: KeyAction::FromText,
-                    takes_space: 1.0,
+                    size_mult: 1.0,
                 },
-                KeyboardButton {
+                Button {
                     text: "e".to_string(),
                     action: KeyAction::FromText,
-                    takes_space: 1.0,
+                    size_mult: 1.0,
                 },
             ]
         }),
         row
     );
-    let row = KeyboardRow::from_str("[{q}{w}{e}");
+    let row = Row::from_str("[{q}{w}{e}");
     assert!(row.is_err());
-    let row = KeyboardRow::from_str("[{q}{w}{e:}]");
+    let row = Row::from_str("[{q}{w}{e:}]");
     assert!(row.is_err());
 }
 
 #[test]
 fn parse_layout() {
-    let layout_qwerty = KeyboardLayout::from_str(
+    let layout_qwerty = Layout::from_str(
         "QWERTY_Mobile
 [{q}{w}{e}{r}{t}{y}{u}{i}{o}{p}]
 [{a}{s}{d}{f}{g}{h}{j}{k}{l}]
@@ -476,7 +469,7 @@ fn parse_layout() {
     );
     assert!(layout_qwerty.is_ok());
 
-    let layout_qwerty_shift_once = KeyboardLayout::from_str(
+    let layout_qwerty_shift_once = Layout::from_str(
         "QWERTY_Mobile_MOD_SHIFT_ONCE
 [{Q}{W}{E}{R}{T}{Y}{U}{I}{O}{P}]
 [{A}{S}{D}{F}{G}{H}{J}{K}{L}]
@@ -485,7 +478,7 @@ fn parse_layout() {
     );
     assert!(layout_qwerty_shift_once.is_ok());
 
-    let layout_qwerty_shift_hold = KeyboardLayout::from_str(
+    let layout_qwerty_shift_hold = Layout::from_str(
         "QWERTY_Mobile_MOD_SHIFT_HOLD
 [{Q}{W}{E}{R}{T}{Y}{U}{I}{O}{P}]
 [{A}{S}{D}{F}{G}{H}{J}{K}{L}]
@@ -494,7 +487,7 @@ fn parse_layout() {
     );
     assert!(layout_qwerty_shift_hold.is_ok());
 
-    let layout_numbers = KeyboardLayout::from_str(
+    let layout_numbers = Layout::from_str(
         "Numeric_Mobile
 [{1}{2}{3}{4}{5}{6}{7}{8}{9}{0}]
 [{@}{#}{$}{_}{%}{&}{-}{+}{(}{)}]
@@ -503,7 +496,7 @@ fn parse_layout() {
     );
     assert!(layout_numbers.is_ok());
 
-    let layout_symbols = KeyboardLayout::from_str(
+    let layout_symbols = Layout::from_str(
         "Signs_Mobile
 [{~}{`}{|}{\\}{=}{^}{<}{>}{[}{]}]
 [{?123:Layout(Numeric_Mobile);1.5}{*}{\"}{\'}{\\:}{\\;}{!}{?}{<❌:Key(Backspace);1.5}]
@@ -540,7 +533,7 @@ pub struct VirtualKeyboard {
     id: egui::Id,
     focus: Option<egui::Id>,
     events: Vec<egui::Event>,
-    layouts: Vec<KeyboardLayout>,
+    layouts: Vec<Layout>,
     current: usize,
     mod_alt: ModState,
     mod_shf: ModState,
@@ -549,7 +542,7 @@ pub struct VirtualKeyboard {
 
 impl Default for VirtualKeyboard {
     fn default() -> Self {
-        let layout_qwerty = KeyboardLayout::from_str(
+        let layout_qwerty = Layout::from_str(
             "QWERTY_Mobile
 [{q}{w}{e}{r}{t}{y}{u}{i}{o}{p}]
 [{a}{s}{d}{f}{g}{h}{j}{k}{l}]
@@ -558,7 +551,7 @@ impl Default for VirtualKeyboard {
         )
         .unwrap();
 
-        let layout_qwerty_shift_once = KeyboardLayout::from_str(
+        let layout_qwerty_shift_once = Layout::from_str(
             "QWERTY_Mobile_MOD_SHIFT_ONCE
 [{Q}{W}{E}{R}{T}{Y}{U}{I}{O}{P}]
 [{A}{S}{D}{F}{G}{H}{J}{K}{L}]
@@ -567,7 +560,7 @@ impl Default for VirtualKeyboard {
         )
         .unwrap();
 
-        let layout_qwerty_shift_hold = KeyboardLayout::from_str(
+        let layout_qwerty_shift_hold = Layout::from_str(
             "QWERTY_Mobile_MOD_SHIFT_HOLD
 [{Q}{W}{E}{R}{T}{Y}{U}{I}{O}{P}]
 [{A}{S}{D}{F}{G}{H}{J}{K}{L}]
@@ -576,7 +569,7 @@ impl Default for VirtualKeyboard {
         )
         .unwrap();
 
-        let layout_numbers = KeyboardLayout::from_str(
+        let layout_numbers = Layout::from_str(
             "Numeric_Mobile
 [{1}{2}{3}{4}{5}{6}{7}{8}{9}{0}]
 [{@}{#}{$}{_}{%}{&}{-}{+}{(}{)}]
@@ -585,7 +578,7 @@ impl Default for VirtualKeyboard {
         )
         .unwrap();
 
-        let layout_symbols = KeyboardLayout::from_str(
+        let layout_symbols = Layout::from_str(
             "Signs_Mobile
 [{~}{`}{|}{\\}{=}{^}{<}{>}{[}{]}]
 [{?123:Layout(Numeric_Mobile);1.5}{*}{\"}{\'}{\\:}{\\;}{!}{?}{<❌:Key(Backspace);1.5}]
@@ -621,7 +614,7 @@ impl VirtualKeyboard {
         self
     }
 
-    pub fn extend(mut self, layout: KeyboardLayout) -> Self {
+    pub fn extend(mut self, layout: Layout) -> Self {
         self.layouts.push(layout);
         self
     }
@@ -693,7 +686,7 @@ impl VirtualKeyboard {
         ui.painter()
             .rect(kbd_rect, vis.rounding, vis.weak_bg_fill, vis.bg_stroke);
 
-        let draw_btn = |button: &KeyboardButton, offset: &mut Vec2, ui: &mut Ui| {
+        let draw_btn = |button: &Button, offset: &mut Vec2, ui: &mut Ui| {
             let kbd_min = kbd_rect.min.to_vec2();
             Self::draw_one(kbd_min, btn_std, item_spacing, button, offset, ui)
         };
@@ -725,13 +718,13 @@ impl VirtualKeyboard {
         kbd_min: Vec2,
         btn_std: Vec2,
         itm_spc: Vec2,
-        button: &KeyboardButton,
+        button: &Button,
         offset: &mut Vec2,
         ui: &mut Ui,
     ) -> Response {
         let min = (kbd_min + *offset).to_pos2();
         let size = vec2(
-            btn_std.x + (btn_std.x + itm_spc.x) * (button.takes_space - 1.0),
+            btn_std.x + (btn_std.x + itm_spc.x) * (button.size_mult - 1.0),
             btn_std.y,
         );
         offset.x += size.x + itm_spc.x;

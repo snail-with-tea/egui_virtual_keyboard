@@ -1,6 +1,6 @@
 # egui_virtual_keyboard
 
-Example use :
+Example use with egui & eframe:
 ```rust
 use egui_virtual_keyboard::VirtualKeyboard;
 
@@ -35,7 +35,6 @@ impl eframe::App for TemplateApp {
 
         let scr_size = ctx.screen_rect().size();
         egui::Window::new("KBD")
-            .max_width(scr_size.x * 0.5)
             .show(ctx, |ui| {
                 self.keyboard.show(ui);
             });
