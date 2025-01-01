@@ -1,7 +1,7 @@
-use std::{error::Error, fmt::Display, str::FromStr, vec};
+use std::{error::Error, fmt::Display, str::FromStr};
 
 use egui::{
-    epaint::RectShape, text_selection::visuals, vec2, Align2, Galley, Rect, Response, RichText,
+    epaint::RectShape, vec2, Align2, Rect, Response, RichText,
     Sense, TextStyle, Ui, Vec2, WidgetText,
 };
 
@@ -10,7 +10,6 @@ const DO_NOT_USE_CHARS: &[char] = &['(', ')', '{', '}', '[', ']', '"', ':', ';',
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Modifier {
     Alt,
-    Super,
     Shift,
     Control,
 }
@@ -33,12 +32,21 @@ impl FromStr for Modifier {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "Alt" => Self::Alt,
-            "Super" => Self::Super,
             "Shift" => Self::Shift,
             "Control" => Self::Control,
             _ => Err(ParseModifierError {
                 parsing: s.to_string(),
             })?,
+        })
+    }
+}
+
+impl Display for Modifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}",match self {
+            Self::Alt => "Alt",
+            Self::Shift => "Shift",
+            Self::Control => "Control",
         })
     }
 }
@@ -526,7 +534,6 @@ pub struct VirtualKeyboard {
     mod_alt: ModState,
     mod_shf: ModState,
     mod_cmd: ModState,
-    mod_sup: ModState,
 }
 
 impl Default for VirtualKeyboard {
@@ -596,7 +603,6 @@ impl VirtualKeyboard {
             mod_alt: ModState::Off,
             mod_shf: ModState::Off,
             mod_cmd: ModState::Off,
-            mod_sup: ModState::Off,
         }
     }
 
@@ -614,6 +620,22 @@ impl VirtualKeyboard {
         self.layouts.clear();
     }
 
+    pub fn switch_layout(&mut self, name: &str) {
+        let opt = self
+            .layouts
+            .iter()
+            .enumerate()
+            .find(|(_, layout)| layout.name == name)
+            .map(|(pos, _)| pos);
+        if let Some(pos) = opt {
+            self.current = pos;
+        }
+    }
+
+    pub fn bump_events(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        raw_input.events.append(&mut self.events);
+    }
+
     pub fn show(&mut self, ui: &mut Ui) {
         let focus = ui.ctx().memory(|mem| mem.focused());
 
@@ -627,22 +649,6 @@ impl VirtualKeyboard {
             ui.ctx().memory_mut(|mem| {
                 mem.request_focus(focus);
             });
-        }
-    }
-
-    pub fn bump_events(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        raw_input.events.append(&mut self.events);
-    }
-
-    pub fn switch_layout(&mut self, name: &str) {
-        let opt = self
-            .layouts
-            .iter()
-            .enumerate()
-            .find(|(_, layout)| layout.name == name)
-            .map(|(pos, _)| pos);
-        if let Some(pos) = opt {
-            self.current = pos;
         }
     }
 
@@ -841,8 +847,14 @@ impl VirtualKeyboard {
             command: self.mod_cmd != ModState::Off,
             ..Default::default()
         };
-        match (action, response.clicked(), response.double_clicked()) {
-            (KeyAction::Layout(name), true, _) => self.switch_layout(&name),
+        match (response.clicked(), response.double_clicked(), action) {
+            (true, _, KeyAction::Layout(name)) => self.switch_layout(&name),
+            (true,_,KeyAction::Modifier(modifier)) => {
+                match modifier {
+                    Modifier::Shift =
+                }
+            }
+
             _ => {}
         }
     }
