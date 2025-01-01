@@ -1,8 +1,8 @@
 use std::{error::Error, fmt::Display, str::FromStr};
 
 use egui::{
-    epaint::RectShape, vec2, Align2, Rect, Response, RichText,
-    Sense, TextStyle, Ui, Vec2, WidgetText,
+    epaint::RectShape, vec2, Align2, Rect, Response, RichText, Sense, TextStyle, Ui, Vec2,
+    WidgetText,
 };
 
 const DO_NOT_USE_CHARS: &[char] = &['(', ')', '{', '}', '[', ']', '"', ':', ';', '|'];
@@ -43,11 +43,15 @@ impl FromStr for Modifier {
 
 impl Display for Modifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}",match self {
-            Self::Alt => "Alt",
-            Self::Shift => "Shift",
-            Self::Control => "Control",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Alt => "Alt",
+                Self::Shift => "Shift",
+                Self::Control => "Control",
+            }
+        )
     }
 }
 
@@ -483,6 +487,7 @@ fn parse_layout() {
 [{⇧:Modifier(Shift);1.5}{z}{x}{c}{v}{b}{n}{m}{<❌:Key(Backspace);1.5}]
 [{?123:Layout(Numeric_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
     );
+    assert!(layout_qwerty.is_ok());
 
     let layout_qwerty_shift_once = KeyboardLayout::from_str(
         "QWERTY_Mobile_MOD_SHIFT_ONCE
@@ -491,6 +496,7 @@ fn parse_layout() {
 [{⬆:Modifier(Shift);1.5}{Z}{X}{C}{V}{B}{N}{M}{<❌:Key(Backspace);1.5}]
 [{?123:Layout(Numeric_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
     );
+    assert!(layout_qwerty_shift_once.is_ok());
 
     let layout_qwerty_shift_hold = KeyboardLayout::from_str(
         "QWERTY_Mobile_MOD_SHIFT_HOLD
@@ -499,6 +505,7 @@ fn parse_layout() {
 [{⮉:Modifier(Shift);1.5}{Z}{X}{C}{V}{B}{N}{M}{<❌:Key(Backspace);1.5}]
 [{?123:Layout(Numeric_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
     );
+    assert!(layout_qwerty_shift_hold.is_ok());
 
     let layout_numbers = KeyboardLayout::from_str(
         "Numeric_Mobile
@@ -507,6 +514,7 @@ fn parse_layout() {
 [{=\\<:Layout(Signs_Mobile);1.5}{*}{\"}{\'}{\\:}{\\;}{!}{?}{<❌:Key(Backspace);1.5}]
 [{ABC:Layout(QWERTY_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
     );
+    assert!(layout_numbers.is_ok());
 
     let layout_symbols = KeyboardLayout::from_str(
         "Signs_Mobile
@@ -514,14 +522,31 @@ fn parse_layout() {
 [{?123:Layout(Numeric_Mobile);1.5}{*}{\"}{\'}{\\:}{\\;}{!}{?}{<❌:Key(Backspace);1.5}]
 [{ABC:Layout(QWERTY_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
     );
+    assert!(layout_symbols.is_ok());
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum ModState {
     #[default]
     Off,
     Once,
     Hold,
+}
+
+impl ModState {
+    fn mod_str(&self, modifier: Modifier) -> String {
+        match self {
+            Self::Off => "".to_string(),
+            Self::Once => format!("_MOD_{}_ONCE", modifier.to_string().to_uppercase()),
+            Self::Hold => format!("_MOD_{}_HOLD", modifier.to_string().to_uppercase()),
+        }
+    }
+}
+
+#[test]
+fn mod_name() {
+    let name = ModState::Once.mod_str(Modifier::Shift);
+    assert_eq!("_MOD_SHIFT_ONCE".to_string(), name);
 }
 
 pub struct VirtualKeyboard {
@@ -530,7 +555,6 @@ pub struct VirtualKeyboard {
     events: Vec<egui::Event>,
     layouts: Vec<KeyboardLayout>,
     current: usize,
-    actions: Vec<KeyAction>,
     mod_alt: ModState,
     mod_shf: ModState,
     mod_cmd: ModState,
@@ -599,7 +623,6 @@ impl VirtualKeyboard {
             events: vec![],
             layouts: vec![],
             current: 0,
-            actions: vec![],
             mod_alt: ModState::Off,
             mod_shf: ModState::Off,
             mod_cmd: ModState::Off,
@@ -643,7 +666,7 @@ impl VirtualKeyboard {
             self.focus = focus;
         }
 
-        self.buttons(ui);
+        self.buttons_2(ui);
 
         if let Some(focus) = self.focus {
             ui.ctx().memory_mut(|mem| {
@@ -789,14 +812,14 @@ impl VirtualKeyboard {
                 .iter()
                 .map(|button| {
                     let resp = draw_btn(button, &mut offset, ui);
-                    (button.action.clone(), resp)
+                    (button.action.clone(), button.text.clone(), resp)
                 })
                 .collect();
             res
         });
 
-        actions.for_each(|(action, response)| {
-            self.process_action(action, response);
+        actions.for_each(|(action, text, response)| {
+            self.process_action(action, text, response);
         });
     }
 
@@ -840,7 +863,20 @@ impl VirtualKeyboard {
         resp
     }
 
-    fn process_action(&mut self, action: KeyAction, response: Response) {
+    fn layout_name_by_mod(&self) -> String {
+        let Some(layout) = self.layouts.get(self.current).cloned() else {
+            return "".to_string();
+        };
+
+        let mid = layout.name.find("_MOD").unwrap_or(layout.name.len());
+        let (no_mod_name, _r) = layout.name.split_at(mid);
+        no_mod_name.to_string()
+            + &self.mod_alt.mod_str(Modifier::Alt)
+            + &self.mod_shf.mod_str(Modifier::Shift)
+            + &self.mod_cmd.mod_str(Modifier::Control)
+    }
+
+    fn process_action(&mut self, action: KeyAction, text: String, response: Response) {
         let modifiers = egui::Modifiers {
             alt: self.mod_alt != ModState::Off,
             shift: self.mod_shf != ModState::Off,
@@ -849,9 +885,103 @@ impl VirtualKeyboard {
         };
         match (response.clicked(), response.double_clicked(), action) {
             (true, _, KeyAction::Layout(name)) => self.switch_layout(&name),
-            (true,_,KeyAction::Modifier(modifier)) => {
+            (true, false, KeyAction::Modifier(modifier)) => {
                 match modifier {
-                    Modifier::Shift =
+                    Modifier::Shift => {
+                        if self.mod_shf != ModState::Off {
+                            self.mod_shf = ModState::Off;
+                        } else {
+                            self.mod_shf = ModState::Once;
+                        }
+                    }
+                    Modifier::Alt => {
+                        if self.mod_alt != ModState::Off {
+                            self.mod_alt = ModState::Off;
+                        } else {
+                            self.mod_alt = ModState::Once;
+                        }
+                    }
+                    Modifier::Control => {
+                        if self.mod_cmd != ModState::Off {
+                            self.mod_cmd = ModState::Off;
+                        } else {
+                            self.mod_cmd = ModState::Once;
+                        }
+                    }
+                };
+                self.switch_layout(&self.layout_name_by_mod());
+            }
+            (_, true, KeyAction::Modifier(modifier)) => {
+                match modifier {
+                    Modifier::Shift => {
+                        if self.mod_shf != ModState::Hold {
+                            self.mod_shf = ModState::Hold;
+                        } else {
+                            self.mod_shf = ModState::Off;
+                        }
+                    }
+                    Modifier::Alt => {
+                        if self.mod_alt != ModState::Hold {
+                            self.mod_alt = ModState::Hold;
+                        } else {
+                            self.mod_alt = ModState::Off;
+                        }
+                    }
+                    Modifier::Control => {
+                        if self.mod_cmd != ModState::Hold {
+                            self.mod_cmd = ModState::Hold;
+                        } else {
+                            self.mod_cmd = ModState::Off;
+                        }
+                    }
+                };
+                self.switch_layout(&self.layout_name_by_mod());
+            }
+            (true, _, KeyAction::FromText) => {
+                if let Some(key) = egui::Key::from_name(&text) {
+                    self.events.push(egui::Event::Key {
+                        key,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers,
+                    });
+                }
+                self.events.push(egui::Event::Text(text));
+
+                let mut changed = false;
+                if self.mod_alt == ModState::Once {
+                    self.mod_alt = ModState::Off;
+                    changed = true;
+                }
+                if self.mod_shf == ModState::Once {
+                    self.mod_shf = ModState::Off;
+                    changed = true;
+                }
+                if self.mod_cmd == ModState::Once {
+                    self.mod_cmd = ModState::Off;
+                    changed = true;
+                }
+                if changed {
+                    self.switch_layout(&self.layout_name_by_mod());
+                }
+            }
+            (true, _, KeyAction::Key(key)) => {
+                let text = match key {
+                    egui::Key::Space => " ",
+                    _ => "",
+                };
+
+                self.events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                });
+
+                if !text.is_empty() {
+                    self.events.push(egui::Event::Text(text.to_string()));
                 }
             }
 
