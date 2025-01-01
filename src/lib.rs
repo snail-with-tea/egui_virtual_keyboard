@@ -1,9 +1,6 @@
 use std::{error::Error, fmt::Display, str::FromStr};
 
-use egui::{
-    epaint::RectShape, vec2, Align2, Rect, Response, RichText, Sense, TextStyle, Ui, Vec2,
-    WidgetText,
-};
+use egui::{vec2, Rect, Response, RichText, Sense, TextStyle, Ui, Vec2, WidgetText};
 
 const DO_NOT_USE_CHARS: &[char] = &['(', ')', '{', '}', '[', ']', '"', ':', ';', '|'];
 
@@ -371,16 +368,6 @@ impl FromStr for KeyboardLayout {
     }
 }
 
-/*
-* "QWERTY_Mobile"
-* [{1}{2}{3}{4}{5}{6}{7}{8}{9}{0}]
-* [{q}{w}{e}{r}{t}{y}{u}{i}{o}{p}]
-*  [{a}{s}{d}{f}{g}{h}{j}{k}{l}]
-*  [{⇧:Modifier(Shift)}{z}{x}{c}{v}{b}{n}{m}{⬅:Key(Delete)}]
-*[{?123:Layout()}{,}{}{/}{.}{⮨}]
-*
-* */
-
 #[test]
 fn parse_key_action() {
     let action = KeyAction::from_str("Key(Enter)");
@@ -675,95 +662,6 @@ impl VirtualKeyboard {
         }
     }
 
-    fn buttons(&mut self, ui: &mut Ui) {
-        let Some(layout) = self.layouts.get(self.current).cloned() else {
-            return;
-        };
-
-        let spacing = ui.spacing().clone();
-
-        let h_space = ui.available_width();
-
-        ui.label(format!("{}", self.current));
-
-        let max_btns = layout
-            .rows
-            .iter()
-            .map(|row| row.buttons.len())
-            .max()
-            .unwrap_or(1)
-            .max(1);
-
-        let row_count = layout.rows.len().max(1);
-
-        let btn_width =
-            ((h_space - spacing.item_spacing.x * (max_btns - 1) as f32) / max_btns as f32).clamp(
-                spacing.icon_width + spacing.button_padding.x,
-                spacing.interact_size.x,
-            );
-        let btn_height = spacing.interact_size.y * 1.25 + spacing.button_padding.y * 2.0;
-
-        let desired_width =
-            btn_width * max_btns as f32 + spacing.item_spacing.x * (max_btns - 1) as f32;
-        let desired_height =
-            btn_height * row_count as f32 + spacing.item_spacing.y * (row_count - 1) as f32;
-
-        let (total_rect, response) =
-            ui.allocate_exact_size(vec2(desired_width, desired_height), Sense::hover());
-
-        let visuals = ui.style().interact(&response);
-
-        ui.painter().add(RectShape::new(
-            total_rect.expand(visuals.expansion),
-            visuals.rounding,
-            visuals.bg_fill,
-            visuals.bg_stroke,
-        ));
-
-        for (row, kbd_row) in layout.rows.iter().enumerate() {
-            let v_offset = (btn_height + spacing.item_spacing.y) * row as f32;
-            let sized: Vec<_> = kbd_row
-                .buttons
-                .iter()
-                .map(|btn| {
-                    let add_spaces = btn.takes_space.max(1.0) - 1.0;
-                    btn_width + (btn_width + spacing.item_spacing.x) * add_spaces
-                })
-                .collect();
-            let row_w = sized.iter().fold(-spacing.item_spacing.x, |acc, &w| {
-                acc + w + spacing.item_spacing.x
-            });
-
-            let h_offset = (total_rect.width() - row_w) * 0.5;
-            let mut offset = vec2(h_offset, v_offset);
-
-            for (button, width) in kbd_row.buttons.iter().zip(sized) {
-                let min = (total_rect.min.to_vec2() + offset).to_pos2();
-                let rect = Rect::from_min_size(min, vec2(width, btn_height));
-                offset.x += width + spacing.item_spacing.x;
-
-                let response = ui.allocate_rect(rect, Sense::click());
-                self.listen_event(button, &response);
-
-                let visuals = ui.style().interact(&response);
-
-                ui.painter().add(RectShape::new(
-                    rect,
-                    visuals.rounding,
-                    visuals.bg_fill,
-                    visuals.bg_stroke,
-                ));
-
-                let galley = WidgetText::RichText(RichText::new(&button.text).monospace())
-                    .into_galley(ui, None, width, TextStyle::Button);
-
-                let rect = Align2::CENTER_CENTER.align_size_within_rect(galley.size(), rect);
-
-                ui.painter().galley(rect.min, galley, visuals.text_color());
-            }
-        }
-    }
-
     pub fn buttons_2(&mut self, ui: &mut Ui) {
         let Some(layout) = self.layouts.get(self.current).cloned() else {
             return;
@@ -986,103 +884,6 @@ impl VirtualKeyboard {
             }
 
             _ => {}
-        }
-    }
-
-    fn listen_event(&mut self, button: &KeyboardButton, response: &Response) {
-        let modifiers = egui::Modifiers {
-            alt: self.mod_alt != ModState::Off,
-            shift: self.mod_shf != ModState::Off,
-            command: self.mod_cmd != ModState::Off,
-            ..Default::default()
-        };
-
-        if response.clicked() {
-            match &button.action {
-                KeyAction::Layout(name) => self.switch_layout(name),
-                KeyAction::FromText => {
-                    if let Some(key) = egui::Key::from_name(&button.text) {
-                        self.events.push(egui::Event::Key {
-                            key,
-                            physical_key: None,
-                            pressed: true,
-                            repeat: false,
-                            modifiers,
-                        });
-                    }
-                    self.events.push(egui::Event::Text(button.text.clone()));
-
-                    if self.mod_shf == ModState::Once {
-                        let mut name = self.layouts[self.current].name.clone();
-                        name = name.replace("_MOD_SHIFT_ONCE", "");
-                        self.mod_shf = ModState::Off;
-                        self.switch_layout(&name);
-                    }
-                    if self.mod_cmd == ModState::Once {
-                        let mut name = self.layouts[self.current].name.clone();
-                        name = name.replace("_MOD_COMMAND_ONCE", "");
-                        self.mod_cmd = ModState::Off;
-                        self.switch_layout(&name);
-                    }
-                }
-                KeyAction::Key(key) => {
-                    let text = match key {
-                        egui::Key::Space => " ",
-                        _ => "",
-                    };
-
-                    self.events.push(egui::Event::Key {
-                        key: *key,
-                        physical_key: None,
-                        pressed: true,
-                        repeat: false,
-                        modifiers,
-                    });
-
-                    if !text.is_empty() {
-                        self.events.push(egui::Event::Text(text.to_string()));
-                    }
-                }
-                _ => {}
-            }
-        }
-        match (
-            &button.action,
-            response.clicked(),
-            response.double_clicked(),
-        ) {
-            (KeyAction::Modifier(Modifier::Shift), _, true) => {
-                if self.mod_shf != ModState::Hold {
-                    self.mod_shf = ModState::Hold;
-                } else {
-                    self.mod_shf = ModState::Off;
-                }
-            }
-            (KeyAction::Modifier(Modifier::Shift), true, false) => {
-                if self.mod_shf == ModState::Off {
-                    self.mod_shf = ModState::Once;
-                } else {
-                    self.mod_shf = ModState::Off;
-                }
-            }
-            _ => {}
-        }
-
-        if (response.clicked() || response.double_clicked())
-            && matches!(&button.action, KeyAction::Modifier(Modifier::Shift))
-        {
-            let name = self.layouts[self.current].name.clone();
-            let name = if let Some((name, right)) = name.split_once("_MOD_SHIFT") {
-                name.to_string() + &right[5..]
-            } else {
-                name
-            };
-            let name = match self.mod_shf {
-                ModState::Off => name,
-                ModState::Once => name + "_MOD_SHIFT_ONCE",
-                ModState::Hold => name + "_MOD_SHIFT_HOLD",
-            };
-            self.switch_layout(&name);
         }
     }
 }
