@@ -1037,7 +1037,7 @@ impl VirtualKeyboard {
                         }
                     }
                 };
-                self.switch_layout(&self.layout_name_by_mod());
+                self.switch_layout(&self.layout_name());
             }
             (_, true, KeyAction::Modifier(modifier)) => {
                 match modifier {
@@ -1063,7 +1063,7 @@ impl VirtualKeyboard {
                         }
                     }
                 };
-                self.switch_layout(&self.layout_name_by_mod());
+                self.switch_layout(&self.layout_name());
             }
             (true, _, KeyAction::FromText) => {
                 if let Some(key) = egui::Key::from_name(&text) {
@@ -1091,7 +1091,7 @@ impl VirtualKeyboard {
                     changed = true;
                 }
                 if changed {
-                    self.switch_layout(&self.layout_name_by_mod());
+                    self.switch_layout(&self.layout_name());
                 }
             }
             (true, _, KeyAction::Key(key)) => {
