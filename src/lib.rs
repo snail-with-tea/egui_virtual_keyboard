@@ -1,14 +1,73 @@
-use std::{error::Error, fmt::Display, str::FromStr};
+//! # VirtualKeyboard for egui
+//! Adds virtual keyboard to provided ui
+//!
+//! Rcommended to use in separate window or panel
+//!
+//! Example use with eframe:
+//! ```rust
+//! use egui_virtual_keyboard::VirtualKeyboard;
+//!
+//! pub struct ExampleApp {
+//!     label: String,
+//!     keyboard: VirtualKeyboard,
+//! }
+//!
+//! impl Default for ExampleApp {
+//!     fn default() -> Self {
+//!         Self {
+//!             label: "Hello World!".to_owned(),
+//!             keyboard: Default::default(),
+//!         }
+//!     }
+//! }
+//!
+//! impl eframe::App for TemplateApp {
+//!     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+//!         egui::CentralPanel::default().show(ctx, |ui| {
+//!             ui.horizontal(|ui| {
+//!                 ui.label("Write something: ");
+//!                 ui.text_edit_singleline(&mut self.label);
+//!             });
+//!         });
+//!
+//!         let scr_size = ctx.screen_rect().size();
+//!         egui::Window::new("KBD").show(ctx, |ui| {
+//!                 self.keyboard.show(ui);
+//!             });
+//!     }
+//!
+//!     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+//!         self.keyboard.bump_events(ctx, raw_input);
+//!     }
+//! }
+//!
+//!
+//! fn main() -> eframe::Result {
+//!     let native_options = eframe::NativeOptions::default();
+//!     
+//!     eframe::run_native(
+//!         "eframe template",
+//!         native_options,
+//!         Box::new(|_cc| Ok(Box::new(TemplateApp::default()))),
+//!     )
+//! }
+//! ```
+use std::{error::Error, fmt::Display, num::ParseFloatError, str::FromStr};
 
 use egui::{vec2, Rect, Response, RichText, Sense, TextStyle, Ui, Vec2, WidgetText};
 
 const DO_NOT_USE_CHARS: &[char] = &['(', ')', '{', '}', '[', ']', '"', ':', ';', '|'];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// If this is not self explanatory, please read this
+/// [Wikipedia article](https://en.wikipedia.org/wiki/Modifier_key)
+/// to gain general understanding.
 pub enum Modifier {
     Alt,
     Shift,
-    Control,
+    /// Control key on most machines (except Macs).
+    /// Using Command because it souns cooler.
+    Command,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +89,7 @@ impl FromStr for Modifier {
         Ok(match s {
             "Alt" => Self::Alt,
             "Shift" => Self::Shift,
-            "Control" => Self::Control,
+            "Command" => Self::Command,
             _ => Err(ParseModifierError {
                 parsing: s.to_string(),
             })?,
@@ -46,22 +105,36 @@ impl Display for Modifier {
             match self {
                 Self::Alt => "Alt",
                 Self::Shift => "Shift",
-                Self::Control => "Control",
+                Self::Command => "Command",
             }
         )
     }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// # Keyboard key action
+/// Determines what button will do
 pub enum KeyAction {
-    /// Derive action from text
     #[default]
+    /// Derive action from text
+    /// ```
+    /// KeyAction::from_str("FromText")
+    /// ```
     FromText,
     /// Change Layout
+    /// ```
+    /// KeyAction::from_str("Layout(Layout_Name)")
+    /// ```
     Layout(String),
-    /// Physycal key,
+    /// [egui::Key],
+    /// ```
+    /// KeyAction::from_str("Key(A)")
+    /// ```
     Key(egui::Key),
     /// Modifier key
+    /// ```
+    /// KeyAction::from_str("Modifier(Alt)")
+    /// ```
     Modifier(Modifier),
 }
 
@@ -167,10 +240,31 @@ impl FromStr for KeyAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// # Single keyboard button
+/// Contains text & KeyAction
+///
+/// Can be created from string.
+///
+/// For example:
+/// ```rust
+/// Button::from_str("{a}")
+/// ```
+/// Will create button with text "a".
+/// ```rust
+/// Button::from_str("{a:Key(A)}")
+/// ```
+/// After text [KeyAction] can be specified with `:` separator
+/// ```rust
+/// Button::from_str("{a;2.5}")
+/// ```
+/// Button width can be specified after `;` separator
+///
+/// Note that final width is calculated as
+/// `single_width_button * width + item_spacing.x * (width - 1)`
 pub struct Button {
     text: String,
     action: KeyAction,
-    size_mult: f32,
+    width_mult: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,6 +286,37 @@ impl Error for ParseButtonError {
         } else {
             None
         }
+    }
+}
+
+impl From<ParseFloatError> for ParseButtonError {
+    fn from(value: ParseFloatError) -> Self {
+        Self {
+            parsing: value.to_string(),
+            source: None,
+        }
+    }
+}
+
+impl Button {
+    pub fn new(text: String) -> Self {
+        Self {
+            text,
+            action: KeyAction::FromText,
+            width_mult: 1.0,
+        }
+    }
+
+    pub fn with_action(mut self, action: KeyAction) -> Self {
+        self.action = action;
+        self
+    }
+
+    /// Button can be made wider relative to standart size button
+    pub fn with_width(mut self, width: f32) -> Self {
+        let width = width.max(1.0);
+        self.width_mult = width;
+        self
     }
 }
 
@@ -244,20 +369,39 @@ impl FromStr for Button {
         let takes_space = if takes_space.is_empty() {
             1.0
         } else {
-            takes_space[1..].parse::<f32>().unwrap_or(1.0).max(1.0)
+            takes_space[1..].parse::<f32>()?.max(1.0)
         };
 
         Ok(Self {
             text,
             action,
-            size_mult: takes_space,
+            width_mult: takes_space,
         })
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// # Holds a row of buttons
+/// Row can be created from string
+///
+/// For example:
+/// ```rust
+/// Row::from_str("[{q}{w}{e}]")
+/// ```
+/// will create row with 3 buttons
 pub struct Row {
-    pub buttons: Vec<Button>,
+    buttons: Vec<Button>,
+}
+
+impl Row {
+    /// Can be created from vec
+    pub fn from_vec(buttons: Vec<Button>) -> Self {
+        Self { buttons }
+    }
+
+    fn takes_width(&self) -> f32 {
+        self.buttons.iter().map(|btn| btn.width_mult).sum()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,16 +441,47 @@ impl FromStr for Row {
     }
 }
 
-impl Row {
-    fn takes_width(&self) -> f32 {
-        self.buttons.iter().map(|btn| btn.size_mult.max(1.0)).sum()
-    }
-}
-
 #[derive(Debug, Clone)]
+/// # Named row sequence
+///
+/// For example:
+/// ```rust
+/// Layout::from_str("Scream
+/// [{a}]
+/// [{A}]")
+/// ```
+/// Will create a layout with name "Scream"
+/// and 2 rows containing buttons `a` and `A`
 pub struct Layout {
     name: String,
     rows: Vec<Row>,
+}
+
+impl Layout {
+    /// Create empty layout
+    pub fn new(name: String) -> Self {
+        Self { name, rows: vec![] }
+    }
+    /// Add row to layout
+    pub fn extend(mut self, row: Row) -> Self {
+        self.rows.push(row);
+        self
+    }
+    /// Add modifiers to name
+    pub fn with_modifiers(
+        mut self,
+        mod_alt: ModState,
+        mod_shf: ModState,
+        mod_cmd: ModState,
+    ) -> Self {
+        let mid = self.name.find("_MOD").unwrap_or(self.name.len());
+        let (no_mod_name, _r) = self.name.split_at(mid);
+        self.name = no_mod_name.to_string()
+            + &mod_alt.mod_str(Modifier::Alt)
+            + &mod_shf.mod_str(Modifier::Shift)
+            + &mod_cmd.mod_str(Modifier::Command);
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -382,7 +557,7 @@ fn parse_button() {
         Ok(Button {
             text: "?123".to_string(),
             action: KeyAction::FromText,
-            size_mult: 1.0,
+            width_mult: 1.0,
         }),
         button
     );
@@ -393,7 +568,7 @@ fn parse_button() {
         Ok(Button {
             text: "?123".to_string(),
             action: KeyAction::Layout("QWERTY_Mobile".to_string()),
-            size_mult: 1.0,
+            width_mult: 1.0,
         }),
         button
     );
@@ -403,7 +578,7 @@ fn parse_button() {
             text: ":".to_string(),
             action: KeyAction::FromText,
 
-            size_mult: 1.0,
+            width_mult: 1.0,
         }),
         button
     );
@@ -412,7 +587,7 @@ fn parse_button() {
         Ok(Button {
             text: ":".to_string(),
             action: KeyAction::Key(egui::Key::A),
-            size_mult: 1.0,
+            width_mult: 1.0,
         }),
         button
     );
@@ -421,7 +596,7 @@ fn parse_button() {
         Ok(Button {
             text: ":".to_string(),
             action: KeyAction::Key(egui::Key::A),
-            size_mult: 2.0,
+            width_mult: 2.0,
         }),
         button
     );
@@ -436,17 +611,17 @@ fn parse_row() {
                 Button {
                     text: "q".to_string(),
                     action: KeyAction::FromText,
-                    size_mult: 1.0,
+                    width_mult: 1.0,
                 },
                 Button {
                     text: "w".to_string(),
                     action: KeyAction::FromText,
-                    size_mult: 1.0,
+                    width_mult: 1.0,
                 },
                 Button {
                     text: "e".to_string(),
                     action: KeyAction::FromText,
-                    size_mult: 1.0,
+                    width_mult: 1.0,
                 },
             ]
         }),
@@ -506,10 +681,14 @@ fn parse_layout() {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+///Modificator key state
 enum ModState {
     #[default]
+    /// Is not pressed
     Off,
+    /// Will turn off after any other key is pressed
     Once,
+    /// Wil be pressed until clicked again
     Hold,
 }
 
@@ -529,6 +708,60 @@ fn mod_name() {
     assert_eq!("_MOD_SHIFT_ONCE".to_string(), name);
 }
 
+/// # A Keyboard, that can be drawn in egui.
+/// By default holds mobile version of QWERTY, Numeric & Symbols layouts.
+///
+/// Needs to hook into raw input with [bump_events](VirtualKeyboard::bump_events).
+///
+/// Example use:
+///```rust
+///use egui_virtual_keyboard::VirtualKeyboard;
+///
+///pub struct ExampleApp {
+///    label: String,
+///    keyboard: VirtualKeyboard,
+///}
+///
+///impl Default for ExampleApp {
+///    fn default() -> Self {
+///        Self {
+///            label: "Hello World!".to_owned(),
+///            keyboard: Default::default(),
+///        }
+///    }
+///}
+///
+///impl eframe::App for TemplateApp {
+///    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+///        egui::CentralPanel::default().show(ctx, |ui| {
+///            ui.horizontal(|ui| {
+///                ui.label("Write something: ");
+///                ui.text_edit_singleline(&mut self.label);
+///            });
+///        });
+///
+///        let scr_size = ctx.screen_rect().size();
+///        egui::Window::new("KBD").show(ctx, |ui| {
+///                self.keyboard.show(ui);
+///            });
+///    }
+///
+///    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+///        self.keyboard.bump_events(ctx, raw_input);
+///    }
+///}
+///
+///
+///fn main() -> eframe::Result {
+///    let native_options = eframe::NativeOptions::default();
+///    
+///    eframe::run_native(
+///        "eframe template",
+///        native_options,
+///        Box::new(|_cc| Ok(Box::new(TemplateApp::default()))),
+///    )
+///}
+///```
 pub struct VirtualKeyboard {
     id: egui::Id,
     focus: Option<egui::Id>,
@@ -552,34 +785,36 @@ impl Default for VirtualKeyboard {
         .unwrap();
 
         let layout_qwerty_shift_once = Layout::from_str(
-            "QWERTY_Mobile_MOD_SHIFT_ONCE
+            "QWERTY_Mobile
 [{Q}{W}{E}{R}{T}{Y}{U}{I}{O}{P}]
 [{A}{S}{D}{F}{G}{H}{J}{K}{L}]
 [{⬆:Modifier(Shift);1.5}{Z}{X}{C}{V}{B}{N}{M}{<❌:Key(Backspace);1.5}]
 [{?123:Layout(Numeric_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
         )
-        .unwrap();
+        .unwrap()
+        .with_modifiers(ModState::Off, ModState::Once, ModState::Off);
 
         let layout_qwerty_shift_hold = Layout::from_str(
-            "QWERTY_Mobile_MOD_SHIFT_HOLD
+            "QWERTY_Mobile
 [{Q}{W}{E}{R}{T}{Y}{U}{I}{O}{P}]
 [{A}{S}{D}{F}{G}{H}{J}{K}{L}]
 [{⮉:Modifier(Shift);1.5}{Z}{X}{C}{V}{B}{N}{M}{<❌:Key(Backspace);1.5}]
 [{?123:Layout(Numeric_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
         )
-        .unwrap();
+        .unwrap()
+        .with_modifiers(ModState::Off, ModState::Hold, ModState::Off);
 
         let layout_numbers = Layout::from_str(
             "Numeric_Mobile
 [{1}{2}{3}{4}{5}{6}{7}{8}{9}{0}]
 [{@}{#}{$}{_}{%}{&}{-}{+}{(}{)}]
-[{=\\<:Layout(Signs_Mobile);1.5}{*}{\"}{\'}{\\:}{\\;}{!}{?}{<❌:Key(Backspace);1.5}]
+[{=\\<:Layout(Symbols_Mobile);1.5}{*}{\"}{\'}{\\:}{\\;}{!}{?}{<❌:Key(Backspace);1.5}]
 [{ABC:Layout(QWERTY_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
         )
         .unwrap();
 
         let layout_symbols = Layout::from_str(
-            "Signs_Mobile
+            "Symbols_Mobile
 [{~}{`}{|}{\\}{=}{^}{<}{>}{[}{]}]
 [{?123:Layout(Numeric_Mobile);1.5}{*}{\"}{\'}{\\:}{\\;}{!}{?}{<❌:Key(Backspace);1.5}]
 [{ABC:Layout(QWERTY_Mobile);2.0}{,}{Space:Key(Space);3.0}{/}{.}{⮨:Key(Enter);2.0}]",
@@ -596,9 +831,10 @@ impl Default for VirtualKeyboard {
 }
 
 impl VirtualKeyboard {
+    /// Creates empty VirtualKeyboard
     pub fn empty() -> Self {
         VirtualKeyboard {
-            id: egui::Id::new("Virtual Keyboard"),
+            id: egui::Id::new("VirtualKeyboard"),
             focus: None,
             events: vec![],
             layouts: vec![],
@@ -608,12 +844,12 @@ impl VirtualKeyboard {
             mod_cmd: ModState::Off,
         }
     }
-
+    /// Use provided [Id](egui::Id) instead of default "VirtualKeyboard"
     pub fn with_id(mut self, id: egui::Id) -> Self {
         self.id = id;
         self
     }
-
+    /// Add [Layout] to keyboard
     pub fn extend(mut self, layout: Layout) -> Self {
         self.layouts.push(layout);
         self
@@ -622,7 +858,7 @@ impl VirtualKeyboard {
     pub fn clear_layouts(&mut self) {
         self.layouts.clear();
     }
-
+    /// Switches to [Layout] with provided name (if exists)
     pub fn switch_layout(&mut self, name: &str) {
         let opt = self
             .layouts
@@ -634,11 +870,12 @@ impl VirtualKeyboard {
             self.current = pos;
         }
     }
-
+    /// Adds keyboard events to raw input
     pub fn bump_events(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         raw_input.events.append(&mut self.events);
     }
-
+    /// Add Keyboard to ui.
+    /// Recommended to use in separate window or panel.
     pub fn show(&mut self, ui: &mut Ui) {
         let focus = ui.ctx().memory(|mem| mem.focused());
 
@@ -646,7 +883,7 @@ impl VirtualKeyboard {
             self.focus = focus;
         }
 
-        self.buttons_2(ui);
+        self.buttons(ui);
 
         if let Some(focus) = self.focus {
             ui.ctx().memory_mut(|mem| {
@@ -655,7 +892,7 @@ impl VirtualKeyboard {
         }
     }
 
-    pub fn buttons_2(&mut self, ui: &mut Ui) {
+    fn buttons(&mut self, ui: &mut Ui) {
         let Some(layout) = self.layouts.get(self.current).cloned() else {
             return;
         };
@@ -724,7 +961,7 @@ impl VirtualKeyboard {
     ) -> Response {
         let min = (kbd_min + *offset).to_pos2();
         let size = vec2(
-            btn_std.x + (btn_std.x + itm_spc.x) * (button.size_mult - 1.0),
+            btn_std.x + (btn_std.x + itm_spc.x) * (button.width_mult - 1.0),
             btn_std.y,
         );
         offset.x += size.x + itm_spc.x;
@@ -754,7 +991,7 @@ impl VirtualKeyboard {
         resp
     }
 
-    fn layout_name_by_mod(&self) -> String {
+    pub fn layout_name(&self) -> String {
         let Some(layout) = self.layouts.get(self.current).cloned() else {
             return "".to_string();
         };
@@ -764,7 +1001,7 @@ impl VirtualKeyboard {
         no_mod_name.to_string()
             + &self.mod_alt.mod_str(Modifier::Alt)
             + &self.mod_shf.mod_str(Modifier::Shift)
-            + &self.mod_cmd.mod_str(Modifier::Control)
+            + &self.mod_cmd.mod_str(Modifier::Command)
     }
 
     fn process_action(&mut self, action: KeyAction, text: String, response: Response) {
@@ -792,7 +1029,7 @@ impl VirtualKeyboard {
                             self.mod_alt = ModState::Once;
                         }
                     }
-                    Modifier::Control => {
+                    Modifier::Command => {
                         if self.mod_cmd != ModState::Off {
                             self.mod_cmd = ModState::Off;
                         } else {
@@ -818,7 +1055,7 @@ impl VirtualKeyboard {
                             self.mod_alt = ModState::Off;
                         }
                     }
-                    Modifier::Control => {
+                    Modifier::Command => {
                         if self.mod_cmd != ModState::Hold {
                             self.mod_cmd = ModState::Hold;
                         } else {

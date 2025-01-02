@@ -2,6 +2,13 @@
 name = "egui_virtual_keyboard"
 version = "0.1.0"
 edition = "2021"
+authors = ["SnailWithTea <tipounlogick@gmail.com>"]
+description = "Simple Virtual Keyboard for egui"
+readme = "README.md"
+repository = "https://github.com/snail-with-tea/egui_virtual_keyboard"
+license = "MIT OR Apache-2.0"
+keywords = ["gui", "keyboard"]
+
 
 [dependencies]
 egui = {version = "0.30.0"}
