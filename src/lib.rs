@@ -682,7 +682,7 @@ fn parse_layout() {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 ///Modificator key state
-enum ModState {
+pub enum ModState {
     #[default]
     /// Is not pressed
     Off,
