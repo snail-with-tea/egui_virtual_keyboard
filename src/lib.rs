@@ -52,13 +52,14 @@
 //!     )
 //! }
 //! ```
-use std::{error::Error, fmt::Display, num::ParseFloatError, str::FromStr};
+use std::{error::Error, fmt::Display, num::ParseFloatError, ops::RangeInclusive, str::FromStr};
 
 use egui::{vec2, Rect, Response, RichText, Sense, TextStyle, Ui, Vec2, WidgetText};
 
 const DO_NOT_USE_CHARS: &[char] = &['(', ')', '{', '}', '[', ']', '"', ':', ';', '|'];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 /// If this is not self explanatory, please read this
 /// [Wikipedia article](https://en.wikipedia.org/wiki/Modifier_key)
 /// to gain general understanding.
@@ -112,6 +113,7 @@ impl Display for Modifier {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 /// # Keyboard key action
 /// Determines what button will do
 pub enum KeyAction {
@@ -240,6 +242,7 @@ impl FromStr for KeyAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 /// # Single keyboard button
 /// Contains text & KeyAction
 ///
@@ -381,6 +384,7 @@ impl FromStr for Button {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 /// # Holds a row of buttons
 /// Row can be created from string
 ///
@@ -442,6 +446,7 @@ impl FromStr for Row {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 /// # Named row sequence
 ///
 /// For example:
@@ -762,15 +767,22 @@ fn mod_name() {
 ///    )
 ///}
 ///```
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct VirtualKeyboard {
-    id: egui::Id,
+    #[serde(skip)]
+    mod_alt: ModState,
+    #[serde(skip)]
+    mod_shf: ModState,
+    #[serde(skip)]
+    mod_cmd: ModState,
+    #[serde(skip)]
     focus: Option<egui::Id>,
+    #[serde(skip)]
     events: Vec<egui::Event>,
+    /// Need to keep layouts in case user added some
+    id: egui::Id,
     layouts: Vec<Layout>,
     current: usize,
-    mod_alt: ModState,
-    mod_shf: ModState,
-    mod_cmd: ModState,
     /// In case user needs different size for buttons
     button_s: Option<Vec2>,
     button_h: Option<f32>,

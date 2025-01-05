@@ -12,3 +12,8 @@ keywords = ["gui", "keyboard"]
 
 [dependencies]
 egui = {version = "0.30.0"}
+serde = {version = "1.0", features = ["derive"],optional = true}
+
+[features]
+default = ["serde"]
+serde = ["dep:serde","egui/serde"]
