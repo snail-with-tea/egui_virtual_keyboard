@@ -21,7 +21,7 @@
 //!     }
 //! }
 //!
-//! impl eframe::App for TemplateApp {
+//! impl eframe::App for ExampleApp {
 //!     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 //!         egui::CentralPanel::default().show(ctx, |ui| {
 //!             ui.horizontal(|ui| {
@@ -48,7 +48,7 @@
 //!     eframe::run_native(
 //!         "eframe template",
 //!         native_options,
-//!         Box::new(|_cc| Ok(Box::new(TemplateApp::default()))),
+//!         Box::new(|_cc| Ok(Box::new(ExampleApp::default()))),
 //!     )
 //! }
 //! ```
@@ -120,22 +120,34 @@ pub enum KeyAction {
     #[default]
     /// Derive action from text
     /// ```
-    /// KeyAction::from_str("FromText")
+    /// use egui_virtual_keyboard::KeyAction;
+    /// use std::str::FromStr;
+    ///
+    /// KeyAction::from_str("FromText");
     /// ```
     FromText,
     /// Change Layout
     /// ```
-    /// KeyAction::from_str("Layout(Layout_Name)")
+    /// use egui_virtual_keyboard::KeyAction;
+    /// use std::str::FromStr;
+    ///
+    /// KeyAction::from_str("Layout(Layout_Name)");
     /// ```
     Layout(String),
     /// [egui::Key],
     /// ```
-    /// KeyAction::from_str("Key(A)")
+    /// use egui_virtual_keyboard::KeyAction;
+    /// use std::str::FromStr;
+    ///
+    /// KeyAction::from_str("Key(A)");
     /// ```
     Key(egui::Key),
     /// Modifier key
     /// ```
-    /// KeyAction::from_str("Modifier(Alt)")
+    /// use egui_virtual_keyboard::KeyAction;
+    /// use std::str::FromStr;
+    ///
+    /// KeyAction::from_str("Modifier(Alt)");
     /// ```
     Modifier(Modifier),
 }
@@ -250,15 +262,24 @@ impl FromStr for KeyAction {
 ///
 /// For example:
 /// ```rust
-/// Button::from_str("{a}")
+/// use egui_virtual_keyboard::Button;
+/// use std::str::FromStr;
+///
+/// Button::from_str("{a}");
 /// ```
 /// Will create button with text "a".
 /// ```rust
-/// Button::from_str("{a:Key(A)}")
+/// use egui_virtual_keyboard::Button;
+/// use std::str::FromStr;
+///
+/// Button::from_str("{a:Key(A)}");
 /// ```
 /// After text [KeyAction] can be specified with `:` separator
 /// ```rust
-/// Button::from_str("{a;2.5}")
+/// use egui_virtual_keyboard::Button;
+/// use std::str::FromStr;
+///
+/// Button::from_str("{a;2.5}");
 /// ```
 /// Button width can be specified after `;` separator
 ///
@@ -390,7 +411,10 @@ impl FromStr for Button {
 ///
 /// For example:
 /// ```rust
-/// Row::from_str("[{q}{w}{e}]")
+/// use egui_virtual_keyboard::Row;
+/// use std::str::FromStr;
+///
+/// Row::from_str("[{q}{w}{e}]");
 /// ```
 /// will create row with 3 buttons
 pub struct Row {
@@ -451,9 +475,12 @@ impl FromStr for Row {
 ///
 /// For example:
 /// ```rust
+/// use egui_virtual_keyboard::Layout;
+/// use std::str::FromStr;
+///
 /// Layout::from_str("Scream
 /// [{a}]
-/// [{A}]")
+/// [{A}]");
 /// ```
 /// Will create a layout with name "Scream"
 /// and 2 rows containing buttons `a` and `A`
@@ -719,54 +746,55 @@ fn mod_name() {
 /// Needs to hook into raw input with [bump_events](VirtualKeyboard::bump_events).
 ///
 /// Example use:
-///```rust
-///use egui_virtual_keyboard::VirtualKeyboard;
+/// ```rust
+/// use egui_virtual_keyboard::VirtualKeyboard;
 ///
-///pub struct ExampleApp {
-///    label: String,
-///    keyboard: VirtualKeyboard,
-///}
+/// pub struct ExampleApp {
+///     label: String,
+///     keyboard: VirtualKeyboard,
+/// }
 ///
-///impl Default for ExampleApp {
-///    fn default() -> Self {
-///        Self {
-///            label: "Hello World!".to_owned(),
-///            keyboard: Default::default(),
-///        }
-///    }
-///}
+/// impl Default for ExampleApp {
+///     fn default() -> Self {
+///         Self {
+///             label: "Hello World!".to_owned(),
+///             keyboard: Default::default(),
+///         }
+///     }
+/// }
 ///
-///impl eframe::App for TemplateApp {
-///    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-///        egui::CentralPanel::default().show(ctx, |ui| {
-///            ui.horizontal(|ui| {
-///                ui.label("Write something: ");
-///                ui.text_edit_singleline(&mut self.label);
-///            });
-///        });
+/// impl eframe::App for ExampleApp {
+///     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+///         egui::CentralPanel::default().show(ctx, |ui| {
+///             ui.horizontal(|ui| {
+///                 ui.label("Write something: ");
+///                 ui.text_edit_singleline(&mut self.label);
+///             });
+///         });
 ///
-///        let scr_size = ctx.screen_rect().size();
-///        egui::Window::new("KBD").show(ctx, |ui| {
-///                self.keyboard.show(ui);
-///            });
-///    }
+///         let scr_size = ctx.screen_rect().size();
+///         egui::Window::new("KBD").show(ctx, |ui| {
+///                 self.keyboard.show(ui);
+///             });
+///     }
 ///
-///    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-///        self.keyboard.bump_events(ctx, raw_input);
-///    }
-///}
+///     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+///         self.keyboard.bump_events(ctx, raw_input);
+///     }
+/// }
 ///
 ///
-///fn main() -> eframe::Result {
-///    let native_options = eframe::NativeOptions::default();
-///    
-///    eframe::run_native(
-///        "eframe template",
-///        native_options,
-///        Box::new(|_cc| Ok(Box::new(TemplateApp::default()))),
-///    )
-///}
-///```
+/// fn main() -> eframe::Result {
+///     let native_options = eframe::NativeOptions::default();
+///     
+///     eframe::run_native(
+///         "eframe template",
+///         native_options,
+///         Box::new(|_cc| Ok(Box::new(ExampleApp::default()))),
+///     )
+/// }
+/// ```
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct VirtualKeyboard {
     #[serde(skip)]

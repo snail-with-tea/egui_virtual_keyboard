@@ -23,7 +23,7 @@ impl Default for ExampleApp {
     }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for ExampleApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -50,7 +50,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "eframe template",
         native_options,
-        Box::new(|_cc| Ok(Box::new(TemplateApp::default()))),
+        Box::new(|_cc| Ok(Box::new(ExampleApp::default()))),
     )
 }
 ```
