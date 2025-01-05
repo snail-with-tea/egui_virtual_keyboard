@@ -1,6 +1,6 @@
 [package]
 name = "egui_virtual_keyboard"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["SnailWithTea <tipounlogick@gmail.com>"]
 description = "Simple Virtual Keyboard for egui"
