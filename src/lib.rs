@@ -771,6 +771,10 @@ pub struct VirtualKeyboard {
     mod_alt: ModState,
     mod_shf: ModState,
     mod_cmd: ModState,
+    /// In case user needs different size for buttons
+    button_s: Option<Vec2>,
+    button_h: Option<f32>,
+    button_w: Option<RangeInclusive<f32>>,
 }
 
 impl Default for VirtualKeyboard {
@@ -842,19 +846,25 @@ impl VirtualKeyboard {
             mod_alt: ModState::Off,
             mod_shf: ModState::Off,
             mod_cmd: ModState::Off,
+            button_s: None,
+            button_w: None,
+            button_h: None,
         }
     }
+    #[inline]
     /// Use provided [Id](egui::Id) instead of default "VirtualKeyboard"
     pub fn with_id(mut self, id: egui::Id) -> Self {
         self.id = id;
         self
     }
+    #[inline]
     /// Add [Layout] to keyboard
     pub fn extend(mut self, layout: Layout) -> Self {
         self.layouts.push(layout);
         self
     }
 
+    #[inline]
     pub fn clear_layouts(&mut self) {
         self.layouts.clear();
     }
@@ -870,6 +880,28 @@ impl VirtualKeyboard {
             self.current = pos;
         }
     }
+
+    #[inline]
+    /// Use provided button height instead of default `interact_size.x * 0.9`
+    pub fn with_butyon_spacing(mut self, spacing: Vec2) -> Self {
+        self.button_s = Some(spacing);
+        self
+    }
+
+    #[inline]
+    /// Use provided button height instead of default `interact_size.x * 0.9`
+    pub fn with_button_height(mut self, height: f32) -> Self {
+        self.button_h = Some(height);
+        self
+    }
+
+    #[inline]
+    /// Use provided button width range instead of `icon_width..=interact_size.x`
+    pub fn with_button_width(mut self, width: impl Into<RangeInclusive<f32>>) -> Self {
+        self.button_w = Some(width.into());
+        self
+    }
+
     /// Adds keyboard events to raw input
     pub fn bump_events(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         raw_input.events.append(&mut self.events);
@@ -907,15 +939,23 @@ impl VirtualKeyboard {
             .fold(1.0, |acc, val| if val > acc { val } else { acc });
         let row_num = layout.rows.len().max(1) as f32;
 
+        let btn_w_r = self
+            .button_w
+            .clone()
+            .unwrap_or(spacing.icon_width..=spacing.interact_size.x);
+
         let btn_w = ((h_space - spacing.item_spacing.x * (btn_mul - 1.0)) / btn_mul)
-            .clamp(spacing.icon_width, spacing.interact_size.x);
-        let btn_h = spacing.interact_size.x * 0.9;
+            .clamp(*btn_w_r.start(), *btn_w_r.end());
+        let btn_h = self.button_h.unwrap_or(spacing.interact_size.x * 0.9);
+
         let btn_std = vec2(btn_w, btn_h);
 
         let item_spacing = spacing.item_spacing;
+        let itm_spc = self.button_s.unwrap_or(item_spacing);
+
         let desired_size = vec2(
-            (btn_std + item_spacing).x * btn_mul - item_spacing.x,
-            (btn_std + item_spacing).y * row_num - item_spacing.y,
+            (btn_std + itm_spc).x * btn_mul - itm_spc.x,
+            (btn_std + itm_spc).y * row_num - itm_spc.y,
         );
 
         let (_id, kbd_rect) = ui.allocate_space(desired_size);
@@ -925,7 +965,7 @@ impl VirtualKeyboard {
 
         let draw_btn = |button: &Button, offset: &mut Vec2, ui: &mut Ui| {
             let kbd_min = kbd_rect.min.to_vec2();
-            Self::draw_one(kbd_min, btn_std, item_spacing, button, offset, ui)
+            Self::draw_one(kbd_min, btn_std, itm_spc, button, offset, ui)
         };
 
         let actions = layout.rows.iter().enumerate().flat_map(|(row_idx, row)| {
