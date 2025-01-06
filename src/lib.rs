@@ -942,31 +942,37 @@ impl VirtualKeyboard {
         self
     }
 
+    #[inline]
+    pub fn clear_focus(&mut self) {
+        self.focus = None;
+    }
+
     /// Adds keyboard events to raw input
     pub fn bump_events(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         raw_input.events.append(&mut self.events);
     }
     /// Add Keyboard to ui.
     /// Recommended to use in separate window or panel.
-    pub fn show(&mut self, ui: &mut Ui) {
+    pub fn show(&mut self, ui: &mut Ui) -> Response {
         let focus = ui.ctx().memory(|mem| mem.focused());
 
         if ui.ctx().wants_keyboard_input() && self.focus != focus {
             self.focus = focus;
         }
 
-        self.buttons(ui);
+        let resp = self.buttons(ui);
 
         if let Some(focus) = self.focus {
             ui.ctx().memory_mut(|mem| {
                 mem.request_focus(focus);
             });
         }
+        resp
     }
 
-    fn buttons(&mut self, ui: &mut Ui) {
+    fn buttons(&mut self, ui: &mut Ui) -> Response {
         let Some(layout) = self.layouts.get(self.current).cloned() else {
-            return;
+            return ui.response();
         };
 
         let spacing = ui.spacing().clone();
@@ -998,7 +1004,13 @@ impl VirtualKeyboard {
             (btn_std + itm_spc).y * row_num - itm_spc.y,
         );
 
-        let (_id, kbd_rect) = ui.allocate_space(desired_size);
+        let (base_id, kbd_rect) = ui.allocate_space(desired_size);
+        let base_resp = ui.interact(kbd_rect, base_id, Sense::hover());
+
+        if !ui.is_rect_visible(kbd_rect) {
+            return base_resp;
+        }
+
         let vis = ui.style().noninteractive();
         ui.painter()
             .rect(kbd_rect, vis.rounding, vis.weak_bg_fill, vis.bg_stroke);
@@ -1026,9 +1038,13 @@ impl VirtualKeyboard {
             res
         });
 
-        actions.for_each(|(action, text, response)| {
-            self.process_action(action, text, response);
+        let resp = actions.fold(base_resp, |acc, (action, text, response)| {
+            self.process_action(action, text, &response);
+            acc | response
         });
+
+        ui.advance_cursor_after_rect(kbd_rect);
+        resp
     }
 
     fn draw_one(
@@ -1084,7 +1100,7 @@ impl VirtualKeyboard {
             + &self.mod_cmd.mod_str(Modifier::Command)
     }
 
-    fn process_action(&mut self, action: KeyAction, text: String, response: Response) {
+    fn process_action(&mut self, action: KeyAction, text: String, response: &Response) {
         let modifiers = egui::Modifiers {
             alt: self.mod_alt != ModState::Off,
             shift: self.mod_shf != ModState::Off,
