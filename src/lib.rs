@@ -804,8 +804,6 @@ pub struct VirtualKeyboard {
     #[serde(skip)]
     mod_cmd: ModState,
     #[serde(skip)]
-    focus: Option<egui::Id>,
-    #[serde(skip)]
     events: Vec<egui::Event>,
     /// Need to keep layouts in case user added some
     id: egui::Id,
@@ -874,12 +872,18 @@ impl Default for VirtualKeyboard {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct State {
+    active: bool,
+    deactivate: bool,
+    focus: Option<egui::Id>,
+}
+
 impl VirtualKeyboard {
     /// Creates empty VirtualKeyboard
     pub fn empty() -> Self {
         VirtualKeyboard {
             id: egui::Id::new("VirtualKeyboard"),
-            focus: None,
             events: vec![],
             layouts: vec![],
             current: 0,
@@ -897,6 +901,13 @@ impl VirtualKeyboard {
         self.id = id;
         self
     }
+
+    #[inline]
+    /// Get [Id](egui::Id)
+    pub fn id(&self) -> egui::Id {
+        self.id
+    }
+
     #[inline]
     /// Add [Layout] to keyboard
     pub fn extend(mut self, layout: Layout) -> Self {
@@ -905,6 +916,7 @@ impl VirtualKeyboard {
     }
 
     #[inline]
+    /// Clears layouts in keyboard memory
     pub fn clear_layouts(&mut self) {
         self.layouts.clear();
     }
@@ -942,9 +954,17 @@ impl VirtualKeyboard {
         self
     }
 
-    #[inline]
-    pub fn clear_focus(&mut self) {
-        self.focus = None;
+    /// Is keyboard active
+    pub fn is_active(&self, ctx: &egui::Context) -> bool {
+        let state = ctx.memory(|m| (m.data.get_temp::<State>(self.id).unwrap_or_default()));
+        state.active
+    }
+
+    /// Surrender keyboard focus & set keyboard as inactive
+    pub fn deactivate(&self, ctx: &egui::Context) {
+        let mut state = ctx.memory(|m| (m.data.get_temp::<State>(self.id).unwrap_or_default()));
+        state.deactivate = true;
+        ctx.memory_mut(|m| m.data.insert_temp(self.id, state));
     }
 
     /// Adds keyboard events to raw input
@@ -954,19 +974,35 @@ impl VirtualKeyboard {
     /// Add Keyboard to ui.
     /// Recommended to use in separate window or panel.
     pub fn show(&mut self, ui: &mut Ui) -> Response {
-        let focus = ui.ctx().memory(|mem| mem.focused());
+        let (focused, mut state) = ui.memory(|m| {
+            (
+                m.focused(),
+                m.data.get_temp::<State>(self.id).unwrap_or_default(),
+            )
+        });
 
-        if ui.ctx().wants_keyboard_input() && self.focus != focus {
-            self.focus = focus;
+        if focused.is_some() && state.focus != focused {
+            state.active = true;
+            state.focus = focused;
+        }
+
+        if state.deactivate {
+            if let Some(id) = state.focus {
+                ui.memory_mut(|m| m.surrender_focus(id));
+            }
+            state.active = false;
+            state.deactivate = false;
+            state.focus = None;
         }
 
         let resp = self.buttons(ui);
 
-        if let Some(focus) = self.focus {
-            ui.ctx().memory_mut(|mem| {
-                mem.request_focus(focus);
-            });
+        if let (true, Some(id)) = (state.active, state.focus) {
+            ui.memory_mut(|m| m.request_focus(id));
         }
+
+        ui.memory_mut(|m| m.data.insert_temp(self.id, state));
+
         resp
     }
 
