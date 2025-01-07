@@ -873,6 +873,7 @@ impl Default for VirtualKeyboard {
 }
 
 #[derive(Debug, Default, Clone)]
+/// Keyboard's state
 pub struct State {
     active: bool,
     deactivate: bool,
@@ -934,7 +935,7 @@ impl VirtualKeyboard {
     }
 
     #[inline]
-    /// Use provided button height instead of default `interact_size.x * 0.9`
+    /// Use provided spacing instead of context one
     pub fn with_butyon_spacing(mut self, spacing: Vec2) -> Self {
         self.button_s = Some(spacing);
         self
@@ -954,10 +955,21 @@ impl VirtualKeyboard {
         self
     }
 
-    /// Is keyboard active
+    /// Is keyboard currently active
     pub fn is_active(&self, ctx: &egui::Context) -> bool {
         let state = ctx.memory(|m| (m.data.get_temp::<State>(self.id).unwrap_or_default()));
         state.active
+    }
+
+    /// Should keyboard become active
+    pub fn should_activate(&self, ctx: &egui::Context) -> bool {
+        let (focused, state) = ctx.memory(|m| {
+            (
+                m.focused(),
+                m.data.get_temp::<State>(self.id).unwrap_or_default(),
+            )
+        });
+        focused.is_some() && state.focus != focused
     }
 
     /// Surrender keyboard focus & set keyboard as inactive
@@ -965,6 +977,12 @@ impl VirtualKeyboard {
         let mut state = ctx.memory(|m| (m.data.get_temp::<State>(self.id).unwrap_or_default()));
         state.deactivate = true;
         ctx.memory_mut(|m| m.data.insert_temp(self.id, state));
+    }
+
+    /// What ID is keyboard focused on
+    pub fn focused(&self, ctx: &egui::Context) -> Option<egui::Id> {
+        let state = ctx.memory(|m| (m.data.get_temp::<State>(self.id).unwrap_or_default()));
+        state.focus
     }
 
     /// Adds keyboard events to raw input
