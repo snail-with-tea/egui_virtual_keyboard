@@ -996,8 +996,7 @@ impl VirtualKeyboard {
 
         let btn_std = vec2(btn_w, btn_h);
 
-        let item_spacing = spacing.item_spacing;
-        let itm_spc = self.button_s.unwrap_or(item_spacing);
+        let itm_spc = self.button_s.unwrap_or(spacing.item_spacing);
 
         let desired_size = vec2(
             (btn_std + itm_spc).x * btn_mul - itm_spc.x,
@@ -1023,8 +1022,8 @@ impl VirtualKeyboard {
         let actions = layout.rows.iter().enumerate().flat_map(|(row_idx, row)| {
             let btn_mul = row.takes_width();
             let mut offset = vec2(
-                (kbd_rect.width() - (btn_std + item_spacing).x * btn_mul + item_spacing.x) * 0.5,
-                (btn_std + item_spacing).y * row_idx as f32,
+                (kbd_rect.width() - (btn_std + itm_spc).x * btn_mul + itm_spc.x) * 0.5,
+                (btn_std + itm_spc).y * row_idx as f32,
             );
 
             let res: Vec<_> = row
