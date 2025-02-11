@@ -44,7 +44,7 @@
 //!
 //! fn main() -> eframe::Result {
 //!     let native_options = eframe::NativeOptions::default();
-//!     
+//!
 //!     eframe::run_native(
 //!         "eframe template",
 //!         native_options,
@@ -53,8 +53,7 @@
 //! }
 //! ```
 use std::{error::Error, fmt::Display, num::ParseFloatError, ops::RangeInclusive, str::FromStr};
-
-use egui::{vec2, Rect, Response, RichText, Sense, TextStyle, Ui, Vec2, WidgetText};
+use egui::{vec2, Rect, Response, RichText, Sense, StrokeKind, TextStyle, Ui, Vec2, WidgetText};
 
 const DO_NOT_USE_CHARS: &[char] = &['(', ')', '{', '}', '[', ']', '"', ':', ';', '|'];
 
@@ -786,7 +785,7 @@ fn mod_name() {
 ///
 /// fn main() -> eframe::Result {
 ///     let native_options = eframe::NativeOptions::default();
-///     
+///
 ///     eframe::run_native(
 ///         "eframe template",
 ///         native_options,
@@ -1066,7 +1065,7 @@ impl VirtualKeyboard {
 
         let vis = ui.style().noninteractive();
         ui.painter()
-            .rect(kbd_rect, vis.rounding, vis.weak_bg_fill, vis.bg_stroke);
+            .rect(kbd_rect, vis.corner_radius, vis.weak_bg_fill, vis.bg_stroke, StrokeKind::Middle);
 
         let draw_btn = |button: &Button, offset: &mut Vec2, ui: &mut Ui| {
             let kbd_min = kbd_rect.min.to_vec2();
@@ -1127,9 +1126,10 @@ impl VirtualKeyboard {
 
         ui.painter().rect(
             rect,
-            visuals.rounding,
+            visuals.corner_radius,
             visuals.weak_bg_fill,
             visuals.bg_stroke,
+            StrokeKind::Middle,
         );
         ui.painter().galley(
             (rect.center().to_vec2() - text.size() * 0.5).to_pos2(),

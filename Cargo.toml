@@ -12,11 +12,11 @@ include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
 
 
 [dependencies]
-egui = {version = "0.30.0"}
+egui = {version = "0.31.0"}
 serde = {version = "1.0", features = ["derive"],optional = true}
 
 [dev-dependencies]
-eframe = { version = "0.30.0"}
+eframe = { version = "0.31.0"}
 
 [features]
 default = ["serde"]
