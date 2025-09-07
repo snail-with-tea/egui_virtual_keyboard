@@ -44,7 +44,7 @@
 //!
 //! fn main() -> eframe::Result {
 //!     let native_options = eframe::NativeOptions::default();
-//!     
+//!
 //!     eframe::run_native(
 //!         "eframe template",
 //!         native_options,
@@ -786,7 +786,7 @@ fn mod_name() {
 ///
 /// fn main() -> eframe::Result {
 ///     let native_options = eframe::NativeOptions::default();
-///     
+///
 ///     eframe::run_native(
 ///         "eframe template",
 ///         native_options,
@@ -797,13 +797,13 @@ fn mod_name() {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct VirtualKeyboard {
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     mod_alt: ModState,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     mod_shf: ModState,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     mod_cmd: ModState,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     events: Vec<egui::Event>,
     /// Need to keep layouts in case user added some
     id: egui::Id,
